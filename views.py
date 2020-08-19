@@ -648,8 +648,3 @@ def arc_meta(arc_url):
 	req = requests.get(arc_url, params={})
 	data = json.loads(req.content.decode('utf-8'))
 	return data
-
-# pull data for a county or all counties
-def county_data(county_name=''):
-	pass
-

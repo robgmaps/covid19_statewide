@@ -206,3 +206,4 @@ class Command(BaseCommand):
 		self.stdout.write(self.style.SUCCESS(r))
 
 		print ("\nfinished! Elapsed time = " + str(round((time() - t1)/60, 2)) + " minutes")
+	
