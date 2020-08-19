@@ -9,4 +9,4 @@ Django app to scrape data from California public health agencies.  Pulls data fr
 See statewide_county_tables.sql in /sql folder for database table definitions.
 
 Scraping functions in views.py.  Pull data for all inlcuded geographies with:
-`./manage.py covid19_statewide_update_db`
+```./manage.py covid19_statewide_update_db```
