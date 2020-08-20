@@ -10,7 +10,7 @@ from collections import OrderedDict
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from datetime import datetime
-import redis, json, requests, time, copy, re #, pyexcel as pe
+import redis, json, requests, time, copy, re, pyexcel as pe
 
 # generic take an ArcGIS endpoint and load into a postgres table
 def arc2pg(arc_url, database, schema, table, fieldmap, racemap):
@@ -286,7 +286,7 @@ def arc2pg_sacramento_known_unknown(arc_url, database, schema, fieldmap, racemap
 		known_unknown = run_sql_select_query(cur=cur, sql=sql, params={ 'data_date': last_edit_date })
 		if len(known_unknown):
 			pg_disconnect(conn, cur)
-			return "No new data for known/unknown"	
+			return "No new data for Sacramento known/unknown"	
 
 	# get the data
 	req = requests.get(arc_url)
@@ -648,3 +648,51 @@ def arc_meta(arc_url):
 	req = requests.get(arc_url, params={})
 	data = json.loads(req.content.decode('utf-8'))
 	return data
+
+# generic csv to postgres
+def csv2pg(data_url, database, schema, table, fieldmap, racemap={}):
+	print ('\nstarting %s.%s' % (schema, table))
+
+	# get data from source
+	req = requests.get(data_url, params={})
+	records = pe.get_records(file_stream=req.content, file_type='csv')
+	if not len(records):
+		return # abort
+
+	# db connect
+	dbconn = pg_connect('covid19_race_class')
+	conn = dbconn['conn']
+	cur = dbconn['cur']
+
+	# delete from the current table
+	sql = "DELETE from {}.{};".format(schema, table)
+	cur.execute(sql)
+
+	# reset the gids so they don't get too huge
+	sql = "ALTER SEQUENCE {}.{}_id_seq restart;".format(schema, table)
+	cur.execute(sql)
+
+	# load data into table
+	fieldlist = fieldmap.items()
+	columns = [ v for k, v in fieldlist ]
+	sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
+	for r in records:
+		slist = [ "%s" for c in columns ]
+		sql_r = sql + "({});".format(", ".join(slist))
+		values = [ r[k] for k, v in fieldlist ]
+		cur.execute(sql_r, (*values, ))
+
+	# commit changes
+	conn.commit()
+
+	# commit changes to end transaction
+	conn.commit()
+
+	# vacuum analyze
+	conn.autocommit = True
+	cur.execute("VACUUM ANALYZE {}.{}".format(schema, table))
+
+	# close db conn
+	pg_disconnect(conn, cur)
+	return "Updated %s.%s" % (schema, table)
+

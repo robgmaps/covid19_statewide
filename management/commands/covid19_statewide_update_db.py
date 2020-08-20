@@ -1,7 +1,7 @@
 # ./manage.py covid19_statewide_update_db
 from django.core.management.base import BaseCommand, CommandError
 from time import time
-from covid19_statewide.views import arc2pg, arc2pg_orange, arc2pg_fresno, arc2pg_pasadena, pbi2pg_alameda, pbi2pg_long_beach, arc2pg_sacramento_known_unknown
+from covid19_statewide.views import arc2pg, arc2pg_orange, arc2pg_fresno, arc2pg_pasadena, pbi2pg_alameda, pbi2pg_long_beach, arc2pg_sacramento_known_unknown, csv2pg
 import json, redis
 
 # LA Race Names
@@ -148,6 +148,16 @@ CONFIG = {
 			'url_cases': 'https://services2.arcgis.com/zNjnZafDYCAJAbN0/ArcGIS/rest/services/PasadenaCACOVID19Cases/FeatureServer/0/query?where=1%3D1&outFields=*&f=json', 
 			'url_deaths': 'https://services2.arcgis.com/zNjnZafDYCAJAbN0/ArcGIS/rest/services/PasadenaCACOVID19Cases/FeatureServer/0/query?where=1%3D1&outFields=*&f=json', 
 		},
+		'california': {
+			'table_tests': 'cdph_testing_latest',
+			'service_type': 'csv',
+			'fieldmap_tests': {
+				'tested': 'tests',
+				'date': 'data_date',
+			},
+			'racemap': {},
+			'url_tests': 'https://data.ca.gov/dataset/efd6b822-7312-477c-922b-bccb82025fbe/resource/b6648a0d-ff0a-4111-b80b-febda2ac9e09/download/statewide_testing.csv',
+		},
 	},
 }
 
@@ -193,6 +203,11 @@ class Command(BaseCommand):
 				if 'url_tests' in v and v['url_tests']:
 					r = v['function'](v['url_tests'], database, schema, v['table_tests'], v['racemap'])
 					self.stdout.write(self.style.SUCCESS(r))
+
+			elif v['service_type'] == 'csv':
+				if 'url_tests' in v and v['url_tests']:
+					r = csv2pg(v['url_tests'], database, schema, v['table_tests'], v['fieldmap_tests'], v['racemap'])
+					self.stdout.write(self.style.SUCCESS(r))
 		
 		# known/unknown for sacramento is in separate service
 		r = arc2pg_sacramento_known_unknown(geographies['sacramento']['url_known_unknown'], database, schema, geographies['sacramento']['fieldmap_known_unknown'], geographies['sacramento']['racemap'])
@@ -206,4 +221,3 @@ class Command(BaseCommand):
 		self.stdout.write(self.style.SUCCESS(r))
 
 		print ("\nfinished! Elapsed time = " + str(round((time() - t1)/60, 2)) + " minutes")
-	
