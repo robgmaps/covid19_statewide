@@ -149,7 +149,7 @@ CONFIG = {
 			'url_deaths': 'https://services2.arcgis.com/zNjnZafDYCAJAbN0/ArcGIS/rest/services/PasadenaCACOVID19Cases/FeatureServer/0/query?where=1%3D1&outFields=*&f=json', 
 		},
 		'california': {
-			'table_tests': 'cdph_testing_latest',
+			'table_tests': 'cdph_testing_state_latest',
 			'service_type': 'csv',
 			'fieldmap_tests': {
 				'tested': 'tests',
