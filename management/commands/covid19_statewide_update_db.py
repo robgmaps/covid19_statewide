@@ -1,7 +1,7 @@
 # ./manage.py covid19_statewide_update_db
 from django.core.management.base import BaseCommand, CommandError
 from time import time
-from covid19_statewide.views import arc2pg, arc2pg_orange, arc2pg_fresno, arc2pg_pasadena, pbi2pg_alameda, pbi2pg_long_beach, arc2pg_sacramento_known_unknown, csv2pg
+from covid19_statewide.views import arc2pg, arc2pg_orange, arc2pg_fresno, arc2pg_pasadena, pbi2pg_alameda, pbi2pg_long_beach, arc2pg_sacramento_known_unknown, csv2pg, html2pg_tests_county
 import json, redis
 
 # LA Race Names
@@ -77,7 +77,7 @@ CONFIG = {
 		'orange': {
 			'table_cases': 'orange_race_cases_latest',
 			'table_deaths': 'orange_race_deaths_latest',
-			'service_type': 'custom',
+			'service_type': 'esri_custom',
 			'function': arc2pg_orange,
 			'racemap': {
 				'ai': 'American Indian or Alaska Native',
@@ -97,7 +97,7 @@ CONFIG = {
 			'table_cases': 'fresno_race_cases_latest',
 			'table_deaths': '', # 'fresno_race_deaths_latest',
 			'table_tests': 'fresno_race_testing_latest',
-			'service_type': 'custom',
+			'service_type': 'esri_custom',
 			'function': arc2pg_fresno,
 			'racemap': {
 				'hispanic': 'Latinx',
@@ -135,7 +135,7 @@ CONFIG = {
 		'pasadena': {
 			'table_cases': 'pasadena_race_cases_latest',
 			'table_deaths': 'pasadena_race_deaths_latest',
-			'service_type': 'custom',
+			'service_type': 'esri_custom',
 			'function': arc2pg_pasadena,
 			'racemap': {
 				'latinx': 'Latinx',
@@ -191,7 +191,7 @@ class Command(BaseCommand):
 					r = arc2pg(v['url_tests'], database, schema, v['table_tests'], v['fieldmap_tests'], v['racemap'])
 					self.stdout.write(self.style.SUCCESS(r))
 
-			elif v['service_type'] == 'custom':
+			elif v['service_type'] == 'esri_custom':
 				if 'url_cases' in v and v['url_cases']:
 					r = v['function'](v['url_cases'], database, schema, v['table_cases'], v['racemap'])
 					self.stdout.write(self.style.SUCCESS(r))
@@ -218,6 +218,10 @@ class Command(BaseCommand):
 		self.stdout.write(self.style.SUCCESS(r))
 
 		r = pbi2pg_long_beach(database, schema)
+		self.stdout.write(self.style.SUCCESS(r))
+
+		# county-level testing, scrape the html table
+		r = html2pg_tests_county(database, schema, 'cdph_testing_county_latest')
 		self.stdout.write(self.style.SUCCESS(r))
 
 		print ("\nfinished! Elapsed time = " + str(round((time() - t1)/60, 2)) + " minutes")

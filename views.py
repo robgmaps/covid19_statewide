@@ -10,6 +10,7 @@ from collections import OrderedDict
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from datetime import datetime
+from lxml import html
 import redis, json, requests, time, copy, re, pyexcel as pe
 
 # generic take an ArcGIS endpoint and load into a postgres table
@@ -696,3 +697,67 @@ def csv2pg(data_url, database, schema, table, fieldmap, racemap={}):
 	pg_disconnect(conn, cur)
 	return "Updated %s.%s" % (schema, table)
 
+# custom html endpoints
+def html2pg_tests_county(database, schema, table):
+	print ('\nstarting testing by county')
+	# table loads with the html, don't see any API endpoint for getting the data
+	# pull the page html
+	page_url = 'https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/COVID19CountyDataTable.aspx'
+	req = requests.get(page_url, params={})
+	root = html.fromstring(req.content.decode('utf-8'))
+	
+	# check last updated date
+	last_edit_date = root.xpath("//*[contains(text(), 'Chart last updated on ')]//text()")[0].replace('Chart last updated on ', '')
+	last_edit_date = datetime.strptime(last_edit_date, '%B %d, %Y').date()
+
+	# db connect
+	dbconn = pg_connect(database)
+	conn = dbconn['conn']
+	cur = dbconn['cur']
+
+	# check whether data are current
+	sql = "SELECT max(data_date) as dt from %s.%s;" % (schema, table)
+	dt = run_sql_select_query(cur=cur, sql=sql)[0]['dt']
+	print ('last edit', last_edit_date, '\ndata date', dt)
+	if dt and dt >= last_edit_date:
+		pg_disconnect(conn, cur)
+		return "No new data for %s.%s" % (schema, table)
+
+	# get the table rows (there is just one table on the page)
+	rows = []
+	for r in root.xpath('//tr')[3:]:
+		rows.append(r.xpath('.//td/text()'))
+
+	# insert into db
+	print ('inserting records')
+	columns = [ 'county', 'avg_tests_per100k', 'notes', 'data_date' ]
+	sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
+	noteslist = [
+		'County on the County Monitoring List',
+		'Currently on Day 1 of meeting threshold',
+		'Currently on Day 3 of meeting threshold',
+	]
+	for r in rows:
+		slist = [ "%s" for c in columns ]
+		sql_r = sql + "({});".format(", ".join(slist))
+		county_sp = r[0].split('*')
+		values = [
+			county_sp[0].replace('*', ''), 
+			r[1], 
+			noteslist[len(county_sp) - 2] if len(county_sp) > 1 else None, 
+			last_edit_date,
+		]
+		cur.execute(sql_r, (*values, ))
+		
+	# commit inserts
+	conn.commit()
+
+	# vacuum analyze
+	print ('cleaning up')
+	conn.autocommit = True
+	cur.execute("VACUUM ANALYZE {}.{};".format(schema, table))
+	conn.autocommit = False
+
+	# close db conn
+	pg_disconnect(conn, cur)
+	return 'finished %s.%s' % (schema, table)
