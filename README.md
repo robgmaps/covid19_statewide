@@ -6,7 +6,7 @@ Django app to scrape data from California public health agencies.  Pulls data fr
 * Splash instance running on localhost:8050
 * Python requests library
 
-#### File notes:
+### File notes:
 
 1. _sql/statewide_county_tables.sql_ -  database table definitions
 2. _./views.py_ - functions for pulling and handling the data
