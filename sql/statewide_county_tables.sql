@@ -534,7 +534,7 @@
 
 		comment on table state_latest.long_beach_race_cases_latest is 'Cases by race/ethnicity from Long Beach DPH Power BI app.  Updates daily with new data from page charts.  See data_date column for data vintage and row_date for when data were loaded.
 
-		Data dashboard at: https://app.powerbigov.us/view?r=eyJrIjoiM2EyMmNiMjMtY2YxYS00MzZlLTlhMzMtNTExZDJlZGMyOWYzIiwidCI6IjMyZmRmZjJjLWY4NmUtNGJhMy1hNDdkLTZhNDRhN2Y0NWE2NCJ9&pageName=ReportSection';
+		Data dashboard at:  https://app.powerbigov.us/view?r=eyJrIjoiMDNmNWM3ZjgtNjA2OS00YTEyLThhMjUtNTQyMTU1ZWM3Yjk5IiwidCI6IjMxM2YxMWMzLTQyNjgtNGY2YS04ZDNiLWM3ZTY1MDE4M2U3OCJ9';
 
 		COMMENT ON COLUMN state_latest.long_beach_race_cases_latest.race_ethn IS 'Race/Ethnicity.';
 		COMMENT ON COLUMN state_latest.long_beach_race_cases_latest.total_pct IS 'Percent of cumulative cases.';
