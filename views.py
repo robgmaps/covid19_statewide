@@ -149,29 +149,30 @@ def arc2pg_fresno(arc_url, database, schema, table, racemap):
 	# whether cases, deaths, or tests
 	table_type = 'cases' if '_cases_' in table else ('deaths' if '_deaths_' in table else 'tests')
 	
-	# last edit date
-	last_edit_date = timezone.make_aware(datetime.fromtimestamp(metadata['editingInfo']['lastEditDate'] / 1000))
-	
 	# db connect
 	dbconn = pg_connect(database)
 	conn = dbconn['conn']
 	cur = dbconn['cur']
 
-	# check whether data are current
+	# get the data
+	req = requests.get(arc_url)
+	data = json.loads(req.content.decode('utf-8'))
+	a = data['features'][0]['attributes']
+
+	# check whether our data are current
 	sql = "SELECT max(data_date) as dt from %s.%s;" % (schema, table)
 	dt = run_sql_select_query(cur=cur, sql=sql)[0]['dt']
+
+	# last edit date
+	last_edit_date = timezone.make_aware(datetime.fromtimestamp(a['reportdt'] / 1000))
+
 	print ('last edit', last_edit_date, '\ndata date', dt)
 	if dt and dt >= last_edit_date:
 		pg_disconnect(conn, cur)
 		return "No new data for %s.%s" % (schema, table)	
 
-	# get the data
-	req = requests.get(arc_url)
-	data = json.loads(req.content.decode('utf-8'))
-
 	# insert into db
 	print ('inserting records')
-	a = data['features'][0]['attributes']
 	# set up sql
 	columns = [ 'race_ethn', 'crude_rate' if table_type != 'tests' else 'total', 'data_date', ]
 	sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
@@ -210,29 +211,30 @@ def arc2pg_pasadena(arc_url, database, schema, table, racemap):
 	# whether cases, deaths, or tests
 	table_type = 'cases' if '_cases_' in table else ('deaths' if '_deaths_' in table else 'tests')
 	
-	# last edit date
-	last_edit_date = timezone.make_aware(datetime.fromtimestamp(metadata['editingInfo']['lastEditDate'] / 1000))
-	
 	# db connect
 	dbconn = pg_connect(database)
 	conn = dbconn['conn']
 	cur = dbconn['cur']
 
-	# check whether data are current
+	# get the data
+	req = requests.get(arc_url)
+	data = json.loads(req.content.decode('utf-8'))
+	a = data['features'][0]['attributes']
+
+	# check whether our data are current
 	sql = "SELECT max(data_date) as dt from %s.%s;" % (schema, table)
 	dt = run_sql_select_query(cur=cur, sql=sql)[0]['dt']
+
+	# last edit date
+	last_edit_date = timezone.make_aware(datetime.fromtimestamp(a['reportdt'] / 1000))
+
 	print ('last edit', last_edit_date, '\ndata date', dt)
 	if dt and dt >= last_edit_date:
 		pg_disconnect(conn, cur)
 		return "No new data for %s.%s" % (schema, table)	
 
-	# get the data
-	req = requests.get(arc_url)
-	data = json.loads(req.content.decode('utf-8'))
-
 	# insert into db
 	print ('inserting records')
-	a = data['features'][0]['attributes']
 	# set up sql
 	columns = [ 'race_ethn', 'total', 'data_date', ]
 	sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
@@ -482,6 +484,9 @@ def pbi2pg_alameda(database, schema):
 			pg_disconnect(conn, cur)
 			return "No new data for Alameda County"
 
+		# whether to insert or update
+		insert_or_update = 'update' if dt.date() == last_edit_date.date() else 'insert'
+
 		tabledata[k] = {}
 		for typ, p in v.items():
 			sr = session.post(data_url, json=p, headers=headers)
@@ -499,28 +504,42 @@ def pbi2pg_alameda(database, schema):
 					print (k, race_ethn, typ, '\n\n', valueslist, '\n\n', i, valueslist[i])
 					tabledata[k][race_ethn][typ] = valueslist[i-1]['C'][1]
 				else:
-					tabledata[k][race_ethn][typ] = valueslist[i]['C'][1]
-				
-				
+					tabledata[k][race_ethn][typ] = valueslist[i]['C'][1]				
 
 	# insert into db
 	print ('inserting records')
-	columns = [ 'race_ethn', 'total', 'crude_rate', 'data_date', ]
 	for k, t in tabledata.items():
 		table = "alameda_race_%s_latest" % k
-		sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
-		slist = [ "%s" for c in columns ]
-		sql_r = sql + "({});".format(", ".join(slist))
-		# each race
-		for r, v in t.items():
-			values = [
-				r,
-				v['counts'] if 'counts' in v else None,
-				v['rates'] if 'rates' in v else None,
-				last_edit_date,
-			]
-			cur.execute(sql_r, (*values, ))
-
+		if insert_or_update == 'insert':
+			# add a new row
+			columns = [ 'race_ethn', 'total', 'crude_rate', 'data_date', ]
+			sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
+			slist = [ "%s" for c in columns ]
+			sql_r = sql + "({});".format(", ".join(slist))
+			# each race
+			for r, v in t.items():
+				values = [
+					r,
+					v['counts'] if 'counts' in v else None,
+					v['rates'] if 'rates' in v else None,
+					last_edit_date,
+				]
+				cur.execute(sql_r, (*values, ))
+		else: 
+			# update the current row
+			sql = "UPDATE %s.%s set " % (schema, table)
+			sql_r = sql + "total = %s, crude_rate = %s, data_date = %s, row_date = now() where race_ethn = %s and data_date::date = %s;"
+			# each race
+			for r, v in t.items():
+				values = [
+					v['counts'] if 'counts' in v else None,
+					v['rates'] if 'rates' in v else None,
+					last_edit_date,
+					r,
+					last_edit_date.date(),					
+				]
+				cur.execute(sql_r, (*values, ))
+		
 		# commit and vacuum analyze
 		conn.commit()
 		conn.autocommit = True
@@ -609,6 +628,9 @@ def pbi2pg_long_beach(database, schema):
 			pg_disconnect(conn, cur)
 			return "No new data for Long Beach"
 
+		# whether to insert or update
+		insert_or_update = 'update' if dt.date() == last_edit_date.date() else 'insert'
+
 		# response data
 		sr = session.post(data_url, json=v, headers=headers)
 		d = json.loads(sr.content.decode('utf-8'))
@@ -616,22 +638,76 @@ def pbi2pg_long_beach(database, schema):
 
 		# insert into db
 		print ('inserting records for %s' % k)
-		columns = [ 'race_ethn', 'total_pct', 'population_pct', 'data_date', ]
-		sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
-		slist = [ "%s" for c in columns ]
-		sql_r = sql + "({});".format(", ".join(slist))
-		for v in valueslist:
-			r = v['C']
-			race_ethn = racemap[r[0]] if r[0] in racemap else r[0]
-			total_pct = r[1]
-			population_pct = r[2] if len(r) > 3 else None
-			values = [
-				race_ethn,
-				total_pct,
-				population_pct,
-				last_edit_date,
-			]
-			cur.execute(sql_r, (*values, ))
+
+		# different for update or insert
+		if insert_or_update == 'insert':
+			# add a new row
+			columns = [ 'race_ethn', 'total_pct', 'population_pct', 'data_date', ]
+			sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
+			slist = [ "%s" for c in columns ]
+			sql_r = sql + "({});".format(", ".join(slist))
+			# each race
+			# different for cases and deaths
+			if k == 'cases':
+				for v in valueslist:
+					r = v['C']
+					race_ethn = racemap[r[0]] if r[0] in racemap else r[0]
+					population_pct = r[1]
+					total_pct = r[2]
+					values = [
+						race_ethn,
+						total_pct,
+						population_pct,
+						last_edit_date,
+					]
+					cur.execute(sql_r, (*values, ))
+			else:
+				for v in valueslist:
+					r = v['C']
+					race_ethn = racemap[r[0]] if r[0] in racemap else r[0]
+					total_pct = r[2]
+					population_pct = r[3]
+					values = [
+						race_ethn,
+						total_pct,
+						population_pct,
+						last_edit_date,
+					]
+					cur.execute(sql_r, (*values, ))
+		else: 
+			# update the current row
+			sql = "UPDATE %s.%s set " % (schema, table)
+			sql_r = sql + "total_pct = %s, population_pct = %s, data_date = %s, row_date = now() where race_ethn = %s and data_date::date = %s;"
+			# each race
+			# different for cases and deaths
+			if k == 'cases':
+				for v in valueslist:
+					r = v['C']
+					race_ethn = racemap[r[0]] if r[0] in racemap else r[0]
+					population_pct = r[1]
+					total_pct = r[2]
+					values = [
+						total_pct,
+						population_pct,
+						last_edit_date,
+						race_ethn,
+						last_edit_date.date(),
+					]
+					cur.execute(sql_r, (*values, ))
+			else:
+				for v in valueslist:
+					r = v['C']
+					race_ethn = racemap[r[0]] if r[0] in racemap else r[0]
+					total_pct = r[2]
+					population_pct = r[3]
+					values = [
+						total_pct,
+						population_pct,
+						last_edit_date,
+						race_ethn,
+						last_edit_date.date(),
+					]
+					cur.execute(sql_r, (*values, ))		
 
 		# commit and vacuum analyze
 		conn.commit()
@@ -725,18 +801,15 @@ def html2pg_tests_county(database, schema, table):
 
 	# get the table rows (there is just one table on the page)
 	rows = []
-	for r in root.xpath('//tr')[3:]:
+	for r in root.xpath("//table")[0].xpath(".//tr")[3:]:
 		rows.append(r.xpath('.//td/text()'))
+
+	noteslist = [ r.replace('\r\n', '') for r in root.xpath("//table")[1].xpath(".//tr/td//*/text()") ]
 
 	# insert into db
 	print ('inserting records')
-	columns = [ 'county', 'avg_tests_per100k', 'notes', 'data_date' ]
+	columns = [ 'county', 'avg_tests_per100k', 'notes', 'data_date', ]
 	sql = "INSERT into %s.%s (%s) values " % (schema, table, ", ".join(columns))
-	noteslist = [
-		'County on the County Monitoring List',
-		'Currently on Day 1 of meeting threshold',
-		'Currently on Day 3 of meeting threshold',
-	]
 	for r in rows:
 		slist = [ "%s" for c in columns ]
 		sql_r = sql + "({});".format(", ".join(slist))

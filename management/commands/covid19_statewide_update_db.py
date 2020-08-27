@@ -175,6 +175,11 @@ class Command(BaseCommand):
 		schema = CONFIG['schema']
 		geographies = CONFIG['geographies']
 
+		# county-level testing, scrape the html table
+		r = html2pg_tests_county(database, schema, 'cdph_testing_county_latest')
+		self.stdout.write(self.style.SUCCESS(r))
+
+		# Loop geographies
 		for k, v in CONFIG['geographies'].items():
 			if v['service_type'] == 'esri':
 				# arc_url, database, schema, table, fieldmap, racemap
@@ -218,10 +223,6 @@ class Command(BaseCommand):
 		self.stdout.write(self.style.SUCCESS(r))
 
 		r = pbi2pg_long_beach(database, schema)
-		self.stdout.write(self.style.SUCCESS(r))
-
-		# county-level testing, scrape the html table
-		r = html2pg_tests_county(database, schema, 'cdph_testing_county_latest')
-		self.stdout.write(self.style.SUCCESS(r))
+		self.stdout.write(self.style.SUCCESS(r))		
 
 		print ("\nfinished! Elapsed time = " + str(round((time() - t1)/60, 2)) + " minutes")
