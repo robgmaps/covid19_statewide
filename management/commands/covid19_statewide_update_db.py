@@ -176,53 +176,73 @@ class Command(BaseCommand):
 		geographies = CONFIG['geographies']
 
 		# county-level testing, scrape the html table
-		r = html2pg_tests_county(database, schema, 'cdph_testing_county_latest')
-		self.stdout.write(self.style.SUCCESS(r))
+		# try:
+		# 	r = html2pg_tests_county(database, schema, 'cdph_testing_county_latest')
+		# 	self.stdout.write(self.style.SUCCESS(r))
+		# except Exception as e:
+		# 	print (e)
+		# 	self.stdout.write(self.style.ERROR('CDPH testing by county failed'))
 
 		# Loop geographies
 		for k, v in CONFIG['geographies'].items():
-			if v['service_type'] == 'esri':
-				# arc_url, database, schema, table, fieldmap, racemap
-				# cases
-				if 'url_cases' in v and v['url_cases']:
-					r = arc2pg(v['url_cases'], database, schema, v['table_cases'], v['fieldmap_cases'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
+			try:
+				if v['service_type'] == 'esri':
+					# arc_url, database, schema, table, fieldmap, racemap
+					# cases
+					if 'url_cases' in v and v['url_cases']:
+						r = arc2pg(v['url_cases'], database, schema, v['table_cases'], v['fieldmap_cases'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
 
-				if 'url_deaths' in v and v['url_deaths']:
-					r = arc2pg(v['url_deaths'], database, schema, v['table_deaths'], v['fieldmap_deaths'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
+					if 'url_deaths' in v and v['url_deaths']:
+						r = arc2pg(v['url_deaths'], database, schema, v['table_deaths'], v['fieldmap_deaths'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
 
-				if 'url_tests' in v:
-					r = arc2pg(v['url_tests'], database, schema, v['table_tests'], v['fieldmap_tests'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
+					if 'url_tests' in v:
+						r = arc2pg(v['url_tests'], database, schema, v['table_tests'], v['fieldmap_tests'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
 
-			elif v['service_type'] == 'esri_custom':
-				if 'url_cases' in v and v['url_cases']:
-					r = v['function'](v['url_cases'], database, schema, v['table_cases'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
+				elif v['service_type'] == 'esri_custom':
+					if 'url_cases' in v and v['url_cases']:
+						r = v['function'](v['url_cases'], database, schema, v['table_cases'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
 
-				if 'url_deaths' in v and v['url_deaths']:
-					r = v['function'](v['url_deaths'], database, schema, v['table_deaths'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
+					if 'url_deaths' in v and v['url_deaths']:
+						r = v['function'](v['url_deaths'], database, schema, v['table_deaths'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
 
-				if 'url_tests' in v and v['url_tests']:
-					r = v['function'](v['url_tests'], database, schema, v['table_tests'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
+					if 'url_tests' in v and v['url_tests']:
+						r = v['function'](v['url_tests'], database, schema, v['table_tests'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
 
-			elif v['service_type'] == 'csv':
-				if 'url_tests' in v and v['url_tests']:
-					r = csv2pg(v['url_tests'], database, schema, v['table_tests'], v['fieldmap_tests'], v['racemap'])
-					self.stdout.write(self.style.SUCCESS(r))
-		
+				elif v['service_type'] == 'csv':
+					if 'url_tests' in v and v['url_tests']:
+						r = csv2pg(v['url_tests'], database, schema, v['table_tests'], v['fieldmap_tests'], v['racemap'])
+						self.stdout.write(self.style.SUCCESS(r))
+			except Exception as e:
+				print (e)
+				self.stdout.write(self.style.ERROR(str(k) + ' failed'))
+
 		# known/unknown for sacramento is in separate service
-		r = arc2pg_sacramento_known_unknown(geographies['sacramento']['url_known_unknown'], database, schema, geographies['sacramento']['fieldmap_known_unknown'], geographies['sacramento']['racemap'])
-		self.stdout.write(self.style.SUCCESS(r))
+		try:
+			r = arc2pg_sacramento_known_unknown(geographies['sacramento']['url_known_unknown'], database, schema, geographies['sacramento']['fieldmap_known_unknown'], geographies['sacramento']['racemap'])
+			self.stdout.write(self.style.SUCCESS(r))
+		except Exception as e:
+			print (e)
+			self.stdout.write(self.style.ERROR('sacramento known/unknown failed'))
 
 		# Power BI apps - alameda and long beach
-		r = pbi2pg_alameda(database, schema)
-		self.stdout.write(self.style.SUCCESS(r))
+		try:
+			r = pbi2pg_alameda(database, schema)
+			self.stdout.write(self.style.SUCCESS(r))
+		except Exception as e:
+			print (e)
+			self.stdout.write(self.style.ERROR('Alameda failed'))
 
-		r = pbi2pg_long_beach(database, schema)
-		self.stdout.write(self.style.SUCCESS(r))		
+		try:
+			r = pbi2pg_long_beach(database, schema)
+			self.stdout.write(self.style.SUCCESS(r))
+		except Exception as e:
+			print (e)
+			self.stdout.write(self.style.ERROR('Long Beach failed'))		
 
 		print ("\nfinished! Elapsed time = " + str(round((time() - t1)/60, 2)) + " minutes")
